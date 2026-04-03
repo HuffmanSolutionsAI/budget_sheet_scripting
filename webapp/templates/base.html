@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Budget Tracker{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">Budget Tracker</div>
+        <div class="nav-links">
+            <a href="{{ url_for('main.dashboard') }}" class="{% if request.endpoint == 'main.dashboard' %}active{% endif %}">Dashboard</a>
+            <a href="{{ url_for('main.transactions_page') }}" class="{% if request.endpoint == 'main.transactions_page' %}active{% endif %}">Transactions</a>
+            <a href="{{ url_for('main.budgets_page') }}" class="{% if request.endpoint == 'main.budgets_page' %}active{% endif %}">Budgets</a>
+            <a href="{{ url_for('main.categories_page') }}" class="{% if request.endpoint == 'main.categories_page' %}active{% endif %}">Categories</a>
+            <a href="{{ url_for('main.upload_page') }}" class="{% if request.endpoint == 'main.upload_page' %}active{% endif %}">Upload</a>
+        </div>
+    </nav>
+    <main class="container">
+        {% block content %}{% endblock %}
+    </main>
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

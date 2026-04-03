@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+{% block title %}Categories - Budget Tracker{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h2>Category &rarr; Group Mappings</h2>
+        <button class="btn btn-primary" onclick="showAddModal()">Add Category</button>
+    </div>
+
+    <div id="alertArea"></div>
+
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Category</th>
+                    <th>Group</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="catBody"></tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Add/Edit Modal -->
+<div id="catModal" class="modal-overlay hidden" onclick="if(event.target===this)closeModal()">
+    <div class="modal">
+        <h3 id="modalTitle">Add Category</h3>
+        <input type="hidden" id="editId">
+        <div class="form-group" style="margin-bottom:.75rem">
+            <label>Category Name</label>
+            <input type="text" id="catName">
+        </div>
+        <div class="form-group" style="margin-bottom:.75rem">
+            <label>Group</label>
+            <select id="catGroup">
+                {% for g in groups_order %}
+                <option value="{{ g }}">{{ g }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="modal-actions">
+            <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+            <button class="btn btn-primary" onclick="saveCategory()">Save</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const GROUPS_ORDER = {{ groups_order | tojson }};
+
+document.addEventListener('DOMContentLoaded', loadCategories);
+
+async function loadCategories() {
+    const res = await fetch('/api/categories');
+    const data = await res.json();
+    renderCategories(data);
+}
+
+function renderCategories(categories) {
+    const tbody = document.getElementById('catBody');
+    tbody.innerHTML = '';
+
+    // Group them
+    const grouped = {};
+    categories.forEach(c => {
+        if (!grouped[c.group]) grouped[c.group] = [];
+        grouped[c.group].push(c);
+    });
+
+    for (const group of GROUPS_ORDER) {
+        const cats = grouped[group];
+        if (!cats || cats.length === 0) continue;
+
+        const gr = document.createElement('tr');
+        gr.className = 'group-header';
+        gr.innerHTML = `<td colspan="3">${group}</td>`;
+        tbody.appendChild(gr);
+
+        cats.sort((a, b) => a.category.localeCompare(b.category));
+        cats.forEach(c => {
+            tbody.innerHTML += `
+                <tr>
+                    <td>${c.category}</td>
+                    <td>${c.group}</td>
+                    <td>
+                        <button class="btn btn-outline btn-sm" onclick='editCategory(${JSON.stringify(c)})'>Edit</button>
+                        <button class="btn btn-danger btn-sm" onclick="deleteCategory(${c.id})">Delete</button>
+                    </td>
+                </tr>`;
+        });
+    }
+
+    // Any ungrouped
+    const allGroups = new Set(GROUPS_ORDER);
+    for (const [group, cats] of Object.entries(grouped)) {
+        if (!allGroups.has(group)) {
+            const gr = document.createElement('tr');
+            gr.className = 'group-header';
+            gr.innerHTML = `<td colspan="3">${group}</td>`;
+            tbody.appendChild(gr);
+            cats.forEach(c => {
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${c.category}</td>
+                        <td>${c.group}</td>
+                        <td>
+                            <button class="btn btn-outline btn-sm" onclick='editCategory(${JSON.stringify(c)})'>Edit</button>
+                            <button class="btn btn-danger btn-sm" onclick="deleteCategory(${c.id})">Delete</button>
+                        </td>
+                    </tr>`;
+            });
+        }
+    }
+}
+
+function showAddModal() {
+    document.getElementById('modalTitle').textContent = 'Add Category';
+    document.getElementById('editId').value = '';
+    document.getElementById('catName').value = '';
+    document.getElementById('catGroup').value = GROUPS_ORDER[0];
+    document.getElementById('catModal').classList.remove('hidden');
+}
+
+function editCategory(c) {
+    document.getElementById('modalTitle').textContent = 'Edit Category';
+    document.getElementById('editId').value = c.id;
+    document.getElementById('catName').value = c.category;
+    document.getElementById('catGroup').value = c.group;
+    document.getElementById('catModal').classList.remove('hidden');
+}
+
+function closeModal() {
+    document.getElementById('catModal').classList.add('hidden');
+}
+
+async function saveCategory() {
+    const id = document.getElementById('editId').value;
+    const body = {
+        category: document.getElementById('catName').value,
+        group: document.getElementById('catGroup').value,
+    };
+
+    const url = id ? `/api/categories/${id}` : '/api/categories';
+    const method = id ? 'PUT' : 'POST';
+
+    const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+    });
+
+    if (res.ok) {
+        closeModal();
+        loadCategories();
+    } else {
+        const err = await res.json();
+        alert(err.error || 'Error saving category');
+    }
+}
+
+async function deleteCategory(id) {
+    if (!confirm('Delete this category mapping?')) return;
+    await fetch(`/api/categories/${id}`, { method: 'DELETE' });
+    loadCategories();
+}
+</script>
+{% endblock %}

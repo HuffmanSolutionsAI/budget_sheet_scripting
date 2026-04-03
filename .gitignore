@@ -1,3 +1,7 @@
 *.json
 statements
 *.pkl
+webapp/budget.db
+webapp/uploads/
+__pycache__/
+*.pyc
