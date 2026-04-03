@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}Upload - Budget Tracker{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h2>Upload Statements</h2>
+    </div>
+
+    <div id="alertArea"></div>
+
+    <div class="form-row">
+        <div class="form-group">
+            <label>Account Type</label>
+            <select id="accountSelect">
+                <option value="Chase_Credit_Card">Chase Credit Card</option>
+                <option value="BOFA_Checking">Bank of America Checking</option>
+                <option value="BOFA_Credit_Card">Bank of America Credit Card</option>
+                <option value="Citi_Credit_Card">Citi Credit Card</option>
+                <option value="Venmo">Venmo</option>
+                <option value="Paystub">Paystub (Excel)</option>
+                <option value="Generic">Generic CSV</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="upload-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+        <div style="font-size:2rem; color:var(--text-muted);">&#128193;</div>
+        <p><strong>Click to select</strong> or drag &amp; drop your CSV/Excel file</p>
+        <p style="font-size:.8rem">Supports: .csv, .xlsx, .xls (max 16 MB)</p>
+        <input type="file" id="fileInput" accept=".csv,.xlsx,.xls" style="display:none" onchange="handleFile(this.files[0])">
+    </div>
+
+    <div id="uploadStatus" class="hidden" style="margin-top:1rem; text-align:center;">
+        <p>Uploading...</p>
+    </div>
+</div>
+
+<div class="card" id="resultCard" class="hidden">
+    <div class="card-header">
+        <h2>Upload History</h2>
+    </div>
+    <div id="resultBody"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const dropZone = document.getElementById('dropZone');
+
+dropZone.addEventListener('dragover', e => {
+    e.preventDefault();
+    dropZone.classList.add('dragover');
+});
+dropZone.addEventListener('dragleave', () => {
+    dropZone.classList.remove('dragover');
+});
+dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('dragover');
+    if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+});
+
+async function handleFile(file) {
+    if (!file) return;
+
+    const account = document.getElementById('accountSelect').value;
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('account', account);
+
+    document.getElementById('uploadStatus').classList.remove('hidden');
+    document.getElementById('alertArea').innerHTML = '';
+
+    try {
+        const res = await fetch('/api/upload', {
+            method: 'POST',
+            body: formData,
+        });
+
+        const data = await res.json();
+        document.getElementById('uploadStatus').classList.add('hidden');
+
+        if (res.ok) {
+            document.getElementById('alertArea').innerHTML = `
+                <div class="alert alert-success">
+                    Upload complete: <strong>${data.added}</strong> transactions added, <strong>${data.skipped}</strong> duplicates skipped.
+                </div>`;
+            addResult(file.name, account, data.added, data.skipped);
+        } else {
+            document.getElementById('alertArea').innerHTML = `
+                <div class="alert alert-error">Error: ${data.error}</div>`;
+        }
+    } catch (err) {
+        document.getElementById('uploadStatus').classList.add('hidden');
+        document.getElementById('alertArea').innerHTML = `
+            <div class="alert alert-error">Network error: ${err.message}</div>`;
+    }
+
+    // Reset file input
+    document.getElementById('fileInput').value = '';
+}
+
+function addResult(filename, account, added, skipped) {
+    const resultBody = document.getElementById('resultBody');
+    const now = new Date().toLocaleTimeString();
+    resultBody.innerHTML = `
+        <div style="padding:.5rem 0; border-bottom:1px solid var(--border); display:flex; justify-content:space-between;">
+            <span><strong>${filename}</strong> &rarr; ${account}</span>
+            <span style="color:var(--text-muted)">${added} added, ${skipped} skipped at ${now}</span>
+        </div>` + resultBody.innerHTML;
+}
+</script>
+{% endblock %}

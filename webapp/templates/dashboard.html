@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - Budget Tracker{% endblock %}
+
+{% block content %}
+<div class="card-header">
+    <h2>Budget vs Actual</h2>
+    <div class="year-selector">
+        <label>Year:</label>
+        <select id="yearSelect" onchange="window.location.href='/?year=' + this.value">
+            {% for y in range(2024, 2028) %}
+            <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>
+            {% endfor %}
+        </select>
+    </div>
+</div>
+
+<div id="summaryCards" class="summary-grid"></div>
+
+<div class="card">
+    <div class="table-wrap">
+        <table id="dashboardTable">
+            <thead>
+                <tr>
+                    <th>Category</th>
+                    {% for m in months %}
+                    <th>{{ m[:3] }}</th>
+                    {% endfor %}
+                    <th>Total</th>
+                </tr>
+            </thead>
+            <tbody id="dashboardBody"></tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const YEAR = {{ year }};
+const MONTHS = {{ months | tojson }};
+
+document.addEventListener('DOMContentLoaded', loadDashboard);
+
+async function loadDashboard() {
+    const res = await fetch(`/api/dashboard?year=${YEAR}`);
+    const data = await res.json();
+    renderSummary(data);
+    renderTable(data);
+}
+
+function renderSummary(data) {
+    let totalIncome = 0, totalExpense = 0, totalBudget = 0;
+
+    for (const [group, cats] of Object.entries(data.groups)) {
+        for (const [cat, vals] of Object.entries(cats)) {
+            const actual = Object.values(vals.actual).reduce((a, b) => a + b, 0);
+            const budget = Object.values(vals.budget).reduce((a, b) => a + b, 0);
+            if (group === 'Income') {
+                totalIncome += actual;
+            } else if (group !== 'Transfer') {
+                totalExpense += actual;
+            }
+            totalBudget += budget;
+        }
+    }
+
+    document.getElementById('summaryCards').innerHTML = `
+        <div class="summary-card">
+            <div class="label">Total Income</div>
+            <div class="value positive">${fmt(totalIncome)}</div>
+        </div>
+        <div class="summary-card">
+            <div class="label">Total Expenses</div>
+            <div class="value negative">${fmt(totalExpense)}</div>
+        </div>
+        <div class="summary-card">
+            <div class="label">Net</div>
+            <div class="value ${totalIncome + totalExpense >= 0 ? 'positive' : 'negative'}">${fmt(totalIncome + totalExpense)}</div>
+        </div>
+        <div class="summary-card">
+            <div class="label">Total Budget</div>
+            <div class="value">${fmt(totalBudget)}</div>
+        </div>
+    `;
+}
+
+function renderTable(data) {
+    const tbody = document.getElementById('dashboardBody');
+    tbody.innerHTML = '';
+
+    for (const [group, cats] of Object.entries(data.groups)) {
+        // Group header
+        const gr = document.createElement('tr');
+        gr.className = 'group-header';
+        gr.innerHTML = `<td colspan="14">${group}</td>`;
+        tbody.appendChild(gr);
+
+        const groupTotals = { actual: new Array(12).fill(0), budget: new Array(12).fill(0) };
+
+        for (const [cat, vals] of Object.entries(cats)) {
+            const tr = document.createElement('tr');
+            let html = `<td>${cat}</td>`;
+            let catTotal = 0;
+
+            for (let m = 1; m <= 12; m++) {
+                const actual = vals.actual[m] || 0;
+                const budget = vals.budget[m] || 0;
+                const diff = budget - actual;
+                groupTotals.actual[m - 1] += actual;
+                groupTotals.budget[m - 1] += budget;
+                catTotal += actual;
+
+                if (budget > 0 && actual !== 0) {
+                    const cls = diff >= 0 ? 'bva-positive' : 'bva-negative';
+                    html += `<td title="Budget: ${fmt(budget)}, Actual: ${fmt(actual)}"><span class="${amtClass(actual)}">${fmt(actual)}</span></td>`;
+                } else {
+                    html += `<td><span class="${amtClass(actual)}">${actual !== 0 ? fmt(actual) : ''}</span></td>`;
+                }
+            }
+            html += `<td><strong class="${amtClass(catTotal)}">${fmt(catTotal)}</strong></td>`;
+            tr.innerHTML = html;
+            tbody.appendChild(tr);
+        }
+
+        // Group total
+        const totalRow = document.createElement('tr');
+        totalRow.className = 'total-row';
+        let totalHtml = '<td>Total</td>';
+        let groupTotal = 0;
+        for (let m = 0; m < 12; m++) {
+            const v = groupTotals.actual[m];
+            groupTotal += v;
+            totalHtml += `<td><strong class="${amtClass(v)}">${v !== 0 ? fmt(v) : ''}</strong></td>`;
+        }
+        totalHtml += `<td><strong class="${amtClass(groupTotal)}">${fmt(groupTotal)}</strong></td>`;
+        totalRow.innerHTML = totalHtml;
+        tbody.appendChild(totalRow);
+    }
+}
+
+function fmt(n) {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
+}
+
+function amtClass(n) {
+    if (n > 0) return 'amount-positive';
+    if (n < 0) return 'amount-negative';
+    return '';
+}
+</script>
+{% endblock %}

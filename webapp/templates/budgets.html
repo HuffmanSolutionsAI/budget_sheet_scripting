@@ -1,0 +1,175 @@
+{% extends "base.html" %}
+{% block title %}Budgets - Budget Tracker{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h2>Budget</h2>
+        <div class="year-selector">
+            <label>Year:</label>
+            <select id="yearSelect" onchange="window.location.href='/budgets?year=' + this.value">
+                {% for y in range(2024, 2028) %}
+                <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>
+                {% endfor %}
+            </select>
+            <button class="btn btn-success" onclick="saveBudgets()">Save All</button>
+        </div>
+    </div>
+
+    <div id="alertArea"></div>
+
+    <div class="table-wrap">
+        <table class="budget-table">
+            <thead>
+                <tr>
+                    <th>Category</th>
+                    {% for m in months %}
+                    <th>{{ m[:3] }}</th>
+                    {% endfor %}
+                    <th>Total</th>
+                </tr>
+            </thead>
+            <tbody id="budgetBody"></tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const YEAR = {{ year }};
+const MONTHS = {{ months | tojson }};
+const GROUPS_ORDER = [
+    'Income', 'Necessities', 'Discretionary', 'Fixed Expenses',
+    'Taxes', 'Savings & Investments', 'Work', 'Transfer', 'Other'
+];
+
+let budgetData = {};
+let categoryMap = {};
+
+document.addEventListener('DOMContentLoaded', loadBudgets);
+
+async function loadBudgets() {
+    const [catRes, budRes] = await Promise.all([
+        fetch('/api/categories'),
+        fetch(`/api/budgets?year=${YEAR}`)
+    ]);
+
+    const categories = await catRes.json();
+    const budgets = await budRes.json();
+
+    // Build group → categories map
+    const grouped = {};
+    categories.forEach(c => {
+        categoryMap[c.category] = c.group;
+        if (!grouped[c.group]) grouped[c.group] = [];
+        grouped[c.group].push(c.category);
+    });
+    for (const g of Object.keys(grouped)) {
+        grouped[g].sort();
+    }
+
+    // Index budgets
+    budgets.forEach(b => {
+        const key = `${b.category}_${b.month}`;
+        budgetData[key] = b.amount;
+    });
+
+    renderBudgetTable(grouped);
+}
+
+function renderBudgetTable(grouped) {
+    const tbody = document.getElementById('budgetBody');
+    tbody.innerHTML = '';
+
+    for (const group of GROUPS_ORDER) {
+        const cats = grouped[group];
+        if (!cats || cats.length === 0) continue;
+
+        // Group header
+        const gr = document.createElement('tr');
+        gr.className = 'group-header';
+        gr.innerHTML = `<td colspan="14">${group}</td>`;
+        tbody.appendChild(gr);
+
+        const groupMonthTotals = new Array(12).fill(0);
+
+        for (const cat of cats) {
+            const tr = document.createElement('tr');
+            let html = `<td>${cat}</td>`;
+            let rowTotal = 0;
+
+            for (let m = 1; m <= 12; m++) {
+                const key = `${cat}_${m}`;
+                const val = budgetData[key] || 0;
+                rowTotal += val;
+                groupMonthTotals[m - 1] += val;
+                html += `<td><input type="number" step="0.01" data-cat="${cat}" data-month="${m}" value="${val || ''}" onchange="updateTotal(this)"></td>`;
+            }
+
+            html += `<td class="row-total" id="total_${cat}"><strong>${fmt(rowTotal)}</strong></td>`;
+            tr.innerHTML = html;
+            tbody.appendChild(tr);
+        }
+
+        // Group total row
+        const totalRow = document.createElement('tr');
+        totalRow.className = 'total-row';
+        let totalHtml = '<td>Total</td>';
+        let grandTotal = 0;
+        for (let m = 0; m < 12; m++) {
+            grandTotal += groupMonthTotals[m];
+            totalHtml += `<td id="gtotal_${group}_${m+1}"><strong>${groupMonthTotals[m] !== 0 ? fmt(groupMonthTotals[m]) : ''}</strong></td>`;
+        }
+        totalHtml += `<td><strong>${fmt(grandTotal)}</strong></td>`;
+        totalRow.innerHTML = totalHtml;
+        tbody.appendChild(totalRow);
+    }
+}
+
+function updateTotal(input) {
+    const cat = input.dataset.cat;
+    const row = input.closest('tr');
+    const inputs = row.querySelectorAll('input[type="number"]');
+    let total = 0;
+    inputs.forEach(inp => { total += parseFloat(inp.value) || 0; });
+    const totalCell = document.getElementById(`total_${cat}`);
+    if (totalCell) totalCell.innerHTML = `<strong>${fmt(total)}</strong>`;
+}
+
+async function saveBudgets() {
+    const inputs = document.querySelectorAll('.budget-table input[type="number"]');
+    const entries = [];
+
+    inputs.forEach(inp => {
+        const val = parseFloat(inp.value);
+        if (!isNaN(val) && val !== 0) {
+            entries.push({
+                year: YEAR,
+                month: parseInt(inp.dataset.month),
+                category: inp.dataset.cat,
+                amount: val,
+            });
+        }
+    });
+
+    const res = await fetch('/api/budgets/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(entries),
+    });
+
+    const alertArea = document.getElementById('alertArea');
+    if (res.ok) {
+        alertArea.innerHTML = '<div class="alert alert-success">Budgets saved successfully!</div>';
+    } else {
+        alertArea.innerHTML = '<div class="alert alert-error">Error saving budgets.</div>';
+    }
+    setTimeout(() => { alertArea.innerHTML = ''; }, 3000);
+}
+
+function fmt(n) {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
+}
+</script>
+{% endblock %}
