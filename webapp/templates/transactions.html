@@ -63,7 +63,6 @@
                     <th>Amount</th>
                     <th>Account</th>
                     <th>Category</th>
-                    <th>Confidence</th>
                     <th>Actions</th>
                 </tr>
             </thead>
@@ -181,7 +180,6 @@ function renderTransactions(data) {
                 <td class="${cls}">${fmt(t.amount)}</td>
                 <td>${t.account}</td>
                 <td>${t.category || '<em style="color:#aaa">—</em>'}</td>
-                <td>${t.confidence ? (t.confidence * 100).toFixed(0) + '%' : ''}</td>
                 <td>
                     <button class="btn btn-outline btn-sm" onclick='editTransaction(${JSON.stringify(t)})'>Edit</button>
                     <button class="btn btn-danger btn-sm" onclick="deleteTransaction(${t.id})">Del</button>

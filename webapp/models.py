@@ -13,9 +13,6 @@ class Transaction(db.Model):
     amount = db.Column(db.Float, nullable=False)
     account = db.Column(db.String(100), nullable=False, index=True)
     category = db.Column(db.String(100), default="", index=True)
-    confidence = db.Column(db.Float, default=0.0)
-    subcategory = db.Column(db.String(100), default="")
-    subcat_confidence = db.Column(db.Float, default=0.0)
 
     # Composite duplicate key
     dup_key = db.Column(db.String(1000), unique=True, index=True)
@@ -28,9 +25,6 @@ class Transaction(db.Model):
             "amount": self.amount,
             "account": self.account,
             "category": self.category,
-            "confidence": self.confidence,
-            "subcategory": self.subcategory,
-            "subcat_confidence": self.subcat_confidence,
         }
 
     @staticmethod

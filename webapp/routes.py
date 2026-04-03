@@ -116,7 +116,6 @@ def create_transaction():
         amount=float(data["amount"]),
         account=data["account"],
         category=data.get("category", ""),
-        confidence=float(data.get("confidence", 0)),
         dup_key=dup_key,
     )
     db.session.add(txn)
@@ -139,10 +138,6 @@ def update_transaction(txn_id):
         txn.account = data["account"]
     if "category" in data:
         txn.category = data["category"]
-    if "confidence" in data:
-        txn.confidence = float(data["confidence"])
-    if "subcategory" in data:
-        txn.subcategory = data["subcategory"]
 
     txn.dup_key = Transaction.build_dup_key(
         txn.date, txn.description, txn.amount, txn.account
@@ -208,7 +203,6 @@ def upload_csv():
             amount=float(row["Amount"]),
             account=row["Account"],
             category=row.get("Category", ""),
-            confidence=float(row.get("Confidence", 0)),
             dup_key=dup_key,
         )
         db.session.add(txn)
